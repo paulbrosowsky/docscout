@@ -1,0 +1,65 @@
+name: docscout
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: docscout
+      POSTGRES_PASSWORD: docscout
+      POSTGRES_DB: docscout
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docscout -d docscout"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+  # One-off: downloads the default summary model, then exits.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: ${SUMMARY_MODEL:-qwen2.5:1.5b}
+    entrypoint: ["/bin/sh", "-c", "sleep 3 && ollama pull \"$$MODEL\""]
+    restart: "no"
+
+  app:
+    build: .
+    image: docscout:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://docscout:docscout@db:5432/docscout
+      OLLAMA_URL: http://ollama:11434
+      SUMMARY_MODEL: ${SUMMARY_MODEL:-qwen2.5:1.5b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-384}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+    volumes:
+      # The folder Docscout may read. Projects pick directories below it.
+      - ${DOCS_DIR:-./sample-docs}:/data:ro
+      - models:/models
+    ports:
+      # Bound to localhost only. From another machine, use an SSH tunnel.
+      - "127.0.0.1:${PORT:-8080}:8000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  ollama:
+  models:
