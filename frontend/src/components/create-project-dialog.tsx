@@ -54,7 +54,7 @@ function CreateProjectDialogBody({
       const project = await api.createProject({
         name,
         description,
-        root_path: root ?? "",
+        root_path: root,
         ...chunks,
       })
       onCreated(project)

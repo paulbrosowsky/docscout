@@ -7,3 +7,4 @@ __pycache__/
 .env
 *.tsbuildinfo
 .DS_Store
+.test-docs/

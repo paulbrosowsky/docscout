@@ -38,7 +38,11 @@ function ProjectSettingsDialogBody({
 }) {
   const [name, setName] = React.useState(project.name)
   const [description, setDescription] = React.useState(project.description)
-  const [root, setRoot] = React.useState<string | null>(project.root_path)
+  // null while the open folder overlaps another project.
+  const [picked, setPicked] = React.useState<string | null | undefined>(
+    undefined
+  )
+  const root = picked === undefined ? project.root_path : picked
   const [chunks, setChunks] = React.useState({
     chunk_size: project.chunk_size,
     chunk_overlap: project.chunk_overlap,
@@ -143,7 +147,11 @@ function ProjectSettingsDialogBody({
           </FieldGroup>
         </TabsContent>
         <TabsContent value="directory" className="pt-4">
-          <DirectoryPicker value={root} onChange={setRoot} />
+          <DirectoryPicker
+            value={project.root_path}
+            projectId={project.id}
+            onChange={(path) => setPicked(path)}
+          />
         </TabsContent>
         <TabsContent value="index" className="pt-4">
           <FieldGroup>

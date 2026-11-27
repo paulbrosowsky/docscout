@@ -94,8 +94,8 @@ def _wait(client, pid):
     return status
 
 
-def test_project_defaults_and_chunk_change_reindexes(client):
-    r = client.post("/api/projects", json={"name": "Chunks", "root_path": "sample-docs/notes"})
+def test_project_defaults_and_chunk_change_reindexes(client, scratch_docs):
+    r = client.post("/api/projects", json={"name": "Chunks", "root_path": scratch_docs})
     p = r.json()
     assert p["chunk_size"] == 1000 and p["chunk_overlap"] == 150
     assert _wait(client, p["id"])["indexed"] == 3
@@ -123,3 +123,38 @@ def test_llm_settings_roundtrip(client):
 def test_models_without_ollama(client):
     body = client.get("/api/models").json()
     assert body["ollama_available"] is False and body["suggested"]
+
+
+def test_overlapping_project_folders_are_rejected(client, project):
+    for root in ("sample-docs", "sample-docs/notes", "", "sample-docs/notes/meetings"):
+        r = client.post("/api/projects", json={"name": "Overlap", "root_path": root})
+        assert r.status_code == 409, root
+        assert "must not overlap" in r.json()["detail"]
+    # Path tricks resolve to the same folder.
+    r = client.post("/api/projects", json={"name": "Overlap", "root_path": "backend/../sample-docs/"})
+    assert r.status_code == 409
+
+
+def test_sibling_folder_is_allowed_and_project_can_keep_its_own_root(client, project, scratch_docs):
+    r = client.post("/api/projects", json={"name": "Sibling", "root_path": scratch_docs})
+    assert r.status_code == 201, r.text
+    pid = r.json()["id"]
+    _wait(client, pid)
+    # Saving its own root again is not a conflict, moving into the other project's folder is.
+    assert client.patch(f"/api/projects/{pid}", json={"root_path": scratch_docs}).status_code == 200
+    assert client.patch(f"/api/projects/{pid}", json={"root_path": "sample-docs/manuals"}).status_code == 409
+    client.delete(f"/api/projects/{pid}")
+
+
+def test_directory_browser_marks_taken_folders(client, project):
+    top = client.get("/api/fs/dirs").json()
+    sample = next(d for d in top["dirs"] if d["name"] == "sample-docs")
+    assert sample["taken_by"]["id"] == project and sample["available"] is False
+    assert top["available"] is False  # the docs root contains a project
+    backend = next(d for d in top["dirs"] if d["name"] == "backend")
+    assert backend["available"] is True and backend["taken_by"] is None
+    inner = client.get("/api/fs/dirs", params={"path": "sample-docs/notes"}).json()
+    assert inner["taken_by"]["id"] == project
+    # Editing the project itself: its own folder is available.
+    own = client.get("/api/fs/dirs", params={"project_id": project}).json()
+    assert next(d for d in own["dirs"] if d["name"] == "sample-docs")["available"] is True

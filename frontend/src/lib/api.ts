@@ -105,10 +105,19 @@ export interface ModelsInfo {
 
 export const CHUNK_DEFAULTS = { chunk_size: 1000, chunk_overlap: 150 }
 
-export interface DirListing {
+export interface FolderStatus {
+  /** The project whose folder is this one or one of its parents. */
+  taken_by: { id: number; name: string } | null
+  /** False when choosing it would overlap another project's folder. */
+  available: boolean
+  /** Projects inside subfolders of this folder. */
+  contains: string[]
+}
+
+export interface DirListing extends FolderStatus {
   path: string
   parent: string | null
-  dirs: { name: string; path: string }[]
+  dirs: ({ name: string; path: string } & FolderStatus)[]
 }
 
 export interface Health {
@@ -143,7 +152,10 @@ const q = (params: Record<string, string>) => new URLSearchParams(params)
 
 export const api = {
   health: () => request<Health>("/api/health"),
-  dirs: (path = "") => request<DirListing>(`/api/fs/dirs?${q({ path })}`),
+  dirs: (path = "", projectId?: number) =>
+    request<DirListing>(
+      `/api/fs/dirs?${q({ path, ...(projectId ? { project_id: String(projectId) } : {}) })}`
+    ),
   projects: () => request<Project[]>("/api/projects"),
   project: (id: number) => request<Project>(`/api/projects/${id}`),
   createProject: (body: {

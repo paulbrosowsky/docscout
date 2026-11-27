@@ -44,16 +44,19 @@ Then open <http://localhost:8080> on your own machine.
 
 1. **Create a project.** Give it a name and a description. Under *Index settings*
    you can change the chunk size and overlap. The defaults come from `.env`.
-2. **Add the main directory.** Pick a folder below `DOCS_DIR`. When you press
+2. **Add the main directory.** Pick a folder below `DOCS_DIR`. You can set up as
+   many projects as you like, but their folders must not overlap: a folder that
+   another project uses (or a parent or subfolder of it) is locked in the picker,
+   and the server rejects it too. When you press
    *Create and index*, Docscout scans the folder and indexes every supported file
    straight away. The header shows the progress.
 3. **Browse.** The left pane shows the folder as a file tree. Click a file to open
-   it in the preview.
+   it in a large preview window. Switch projects with the selector next to the logo.
 4. **Search.** Describe what you are looking for in the text box and press Enter.
    Each result shows the title, a short summary, the passage that matched and the
-   path. Click the title or the path to open the file in the preview (PDFs open at
-   the matching page). The file tree collapses to make room. The button next to
-   the file count brings it back.
+   path. Click the title or the path to open the file in the preview window (PDFs
+   open at the matching page) and collapse the file tree. The button next to the
+   file count brings the tree back.
 
 The model dropdown in the search box decides how result summaries are written:
 

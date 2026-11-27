@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from . import indexer
 from .config import SUPPORTED_EXTENSIONS, settings
 from .db import close_pool, connection, init_pool
-from .paths import PathError, resolve_dir, resolve_project_file
+from .paths import PathError, resolve_dir, resolve_project_file, to_rel
 from .search import search as run_search
 from .embeddings import get_embedder
 from .model_settings import LLMSettings, get_llm_settings, save_llm_settings
@@ -118,14 +118,47 @@ def _project(project_id: int) -> dict:
     return row
 
 
-def _check_root(root_path: str | None) -> str | None:
+def _overlaps(a: str, b: str) -> bool:
+    """Two directories (relative to DOCS_ROOT) overlap if one contains the other."""
+    if a == "" or b == "":
+        return True
+    return a == b or a.startswith(b + "/") or b.startswith(a + "/")
+
+
+def _project_roots(exclude_id: int | None = None) -> list[dict]:
+    with connection() as conn:
+        return conn.execute(
+            "SELECT id, name, root_path FROM projects WHERE root_path IS NOT NULL AND id <> %s",
+            (exclude_id or 0,),
+        ).fetchall()
+
+
+def _conflict(root: str, exclude_id: int | None = None) -> dict | None:
+    for other in _project_roots(exclude_id):
+        if _overlaps(root, other["root_path"]):
+            return other
+    return None
+
+
+def _check_root(root_path: str | None, project_id: int | None = None) -> str | None:
+    """Validate a project directory: it must exist and not overlap another project's."""
     if root_path is None:
         return None
     try:
-        resolve_dir(root_path)
+        root = to_rel(resolve_dir(root_path))
     except PathError as exc:
         raise HTTPException(400, str(exc))
-    return root_path.strip("/")
+    other = _conflict(root, project_id)
+    if other:
+        shown = "/" + other["root_path"]
+        if root == other["root_path"]:
+            reason = f"is already used by project \"{other['name']}\""
+        elif root == "" or other["root_path"].startswith(root + "/"):
+            reason = f"contains {shown}, which belongs to project \"{other['name']}\""
+        else:
+            reason = f"is inside {shown}, which belongs to project \"{other['name']}\""
+        raise HTTPException(409, f"This folder {reason}. Project folders must not overlap.")
+    return root
 
 
 def _file_or_404(project: dict, path: str) -> Path:
@@ -158,12 +191,31 @@ def health() -> dict:
 
 
 @app.get("/api/fs/dirs")
-def list_dirs(path: str = "") -> dict:
-    """Browse directories below DOCS_ROOT, for choosing a project directory."""
+def list_dirs(path: str = "", project_id: int | None = None) -> dict:
+    """Browse directories below DOCS_ROOT, for choosing a project directory.
+
+    Each folder says whether another project already covers it (taken_by) and
+    whether it can be chosen (available). project_id excludes that project.
+    """
     try:
         target = resolve_dir(path)
     except PathError as exc:
         raise HTTPException(400, str(exc))
+    roots = _project_roots(project_id)
+
+    def status(rel: str) -> dict:
+        taken = next(
+            (r for r in roots if rel == r["root_path"] or rel.startswith(r["root_path"] + "/")),
+            None,
+        )
+        inside = [r for r in roots if _overlaps(rel, r["root_path"])]
+        return {
+            "taken_by": {"id": taken["id"], "name": taken["name"]} if taken else None,
+            "available": not inside,
+            # Projects in subfolders: you can still open the folder to go deeper.
+            "contains": [r["name"] for r in inside if r is not taken],
+        }
+
     dirs = []
     try:
         entries = sorted(target.iterdir(), key=lambda p: p.name.lower())
@@ -172,16 +224,15 @@ def list_dirs(path: str = "") -> dict:
     for entry in entries:
         if entry.name.startswith(".") or not entry.is_dir():
             continue
-        dirs.append(
-            {"name": entry.name, "path": entry.relative_to(settings.docs_root).as_posix()}
-        )
+        child = entry.relative_to(settings.docs_root).as_posix()
+        dirs.append({"name": entry.name, "path": child, **status(child)})
     rel = target.relative_to(settings.docs_root).as_posix()
     rel = "" if rel == "." else rel
     parent = None
     if rel:
         parent = Path(rel).parent.as_posix()
         parent = "" if parent == "." else parent
-    return {"path": rel, "parent": parent, "dirs": dirs}
+    return {"path": rel, "parent": parent, "dirs": dirs, **status(rel)}
 
 
 # ---------- projects ----------
@@ -230,7 +281,7 @@ def update_project(project_id: int, body: ProjectPatch) -> dict:
         if key in fields and fields[key] is None:
             del fields[key]
     if "root_path" in fields:
-        fields["root_path"] = _check_root(fields["root_path"])
+        fields["root_path"] = _check_root(fields["root_path"], project_id)
     root_changed = "root_path" in fields and fields["root_path"] != project["root_path"]
     chunks_changed = any(
         k in fields and fields[k] != project[k] for k in ("chunk_size", "chunk_overlap")

@@ -43,3 +43,16 @@ def pytest_configure(config):
     from app.embeddings import set_embedder
 
     set_embedder(HashEmbedder())
+
+
+@pytest.fixture
+def scratch_docs(samples):
+    """A throwaway copy of sample-docs/notes inside DOCS_ROOT, outside every other project."""
+    import shutil
+    import uuid
+
+    rel = f"backend/.test-docs/{uuid.uuid4().hex[:8]}"
+    target = samples.parent / rel
+    shutil.copytree(samples / "notes", target)
+    yield rel
+    shutil.rmtree(target, ignore_errors=True)

@@ -1,6 +1,7 @@
 import * as React from "react"
 import {
   ChevronsUpDownIcon,
+  FolderIcon,
   CpuIcon,
   FolderTreeIcon,
   MoonIcon,
@@ -42,6 +43,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import {
   ResizableHandle,
@@ -270,7 +272,7 @@ export function App() {
               </span>
               <ChevronsUpDownIcon className="text-muted-foreground" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent align="start" className="w-80">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Projects</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
@@ -281,13 +283,18 @@ export function App() {
                 >
                   {projects.map((p) => (
                     <DropdownMenuRadioItem key={p.id} value={String(p.id)}>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate">{p.name}</span>
+                      <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
+                        <span className="truncate font-medium">{p.name}</span>
                         {p.description && (
                           <span className="truncate text-xs text-muted-foreground">
                             {p.description}
                           </span>
                         )}
+                        <span className="flex items-center gap-1 truncate font-mono text-[11px] text-muted-foreground">
+                          <FolderIcon className="size-3 shrink-0" />/
+                          {p.root_path ?? "no folder"} · {p.file_count}{" "}
+                          {p.file_count === 1 ? "file" : "files"}
+                        </span>
                       </div>
                     </DropdownMenuRadioItem>
                   ))}
@@ -370,7 +377,7 @@ export function App() {
           <ResizablePanel
             id="tree"
             panelRef={treePanel}
-            defaultSize="22%"
+            defaultSize="26%"
             minSize={200}
             collapsible
             collapsedSize={0}
@@ -424,7 +431,7 @@ export function App() {
             </div>
           </ResizablePanel>
           <ResizableHandle />
-          <ResizablePanel id="search" defaultSize="38%" minSize={320}>
+          <ResizablePanel id="search" minSize={360}>
             <div className="flex h-full min-h-0 flex-col">
               <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2">
                 <Button
@@ -440,7 +447,8 @@ export function App() {
                   )}
                 </Button>
                 <span className="truncate text-xs text-muted-foreground">
-                  {project.file_count} files
+                  {project.file_count}{" "}
+                  {project.file_count === 1 ? "file" : "files"}
                   {project.description ? ` · ${project.description}` : ""}
                 </span>
               </div>
@@ -457,20 +465,6 @@ export function App() {
               </div>
             </div>
           </ResizablePanel>
-          {selected && (
-            <>
-              <ResizableHandle />
-              <ResizablePanel id="preview" defaultSize="40%" minSize={320}>
-                <FilePreview
-                  key={`${project.id}:${selected.path}`}
-                  projectId={project.id}
-                  path={selected.path}
-                  page={selected.page}
-                  onClose={() => setSelected(null)}
-                />
-              </ResizablePanel>
-            </>
-          )}
         </ResizablePanelGroup>
       )}
 
@@ -494,6 +488,30 @@ export function App() {
             setProject(list[0] ?? null)
           }}
         />
+      )}
+      {project && (
+        <Dialog
+          open={!!selected}
+          onOpenChange={(open) => !open && setSelected(null)}
+        >
+          <DialogContent
+            showCloseButton={false}
+            className="flex h-[90svh] w-[min(1100px,95vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+          >
+            <DialogTitle className="sr-only">
+              {selected?.path ?? "Preview"}
+            </DialogTitle>
+            {selected && (
+              <FilePreview
+                key={`${project.id}:${selected.path}`}
+                projectId={project.id}
+                path={selected.path}
+                page={selected.page}
+                onClose={() => setSelected(null)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       )}
       <ModelSettingsDialog
         open={modelsOpen}
