@@ -143,6 +143,7 @@ export function SearchPanel({
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b p-3">
         <form
+          className="mx-auto w-full max-w-3xl"
           onSubmit={(e) => {
             e.preventDefault()
             submit()
@@ -218,87 +219,90 @@ export function SearchPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {error && <p className="p-4 text-sm text-destructive">{error}</p>}
-        {results === null && !error && (
-          <Empty className="h-full">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <SearchIcon />
-              </EmptyMedia>
-              <EmptyTitle>Search by meaning</EmptyTitle>
-              <EmptyDescription>
-                Ask in your own words. Docscout finds documents that match the
-                context, not just the exact words.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
-        {results && results.length === 0 && (
-          <p className="p-4 text-sm text-muted-foreground">
-            No matching documents. The project may still be indexing.
-          </p>
-        )}
-        {results && results.length > 0 && submitted && (
-          <ol className="flex flex-col gap-1 p-2">
-            {results.map((r) => (
-              <li key={r.path}>
-                <div
-                  className={cn(
-                    "flex flex-col gap-1.5 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/60",
-                    activePath === r.path && "bg-muted"
-                  )}
-                >
-                  <div className="flex items-start gap-2">
+        {/* Results share the search box's centred column. */}
+        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col">
+          {error && <p className="p-4 text-sm text-destructive">{error}</p>}
+          {results === null && !error && (
+            <Empty className="flex-1">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchIcon />
+                </EmptyMedia>
+                <EmptyTitle>Search by meaning</EmptyTitle>
+                <EmptyDescription>
+                  Ask in your own words. Docscout finds documents that match the
+                  context, not just the exact words.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          {results && results.length === 0 && (
+            <p className="p-4 text-sm text-muted-foreground">
+              No matching documents. The project may still be indexing.
+            </p>
+          )}
+          {results && results.length > 0 && submitted && (
+            <ol className="flex flex-col gap-1 p-2">
+              {results.map((r) => (
+                <li key={r.path}>
+                  <div
+                    className={cn(
+                      "flex flex-col gap-1.5 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/60",
+                      activePath === r.path && "bg-muted"
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <button
+                        type="button"
+                        className="text-left font-medium hover:underline"
+                        onClick={() => onOpenResult(r)}
+                      >
+                        {r.title}
+                      </button>
+                      <span
+                        className="ml-auto shrink-0 pt-0.5 font-mono text-[11px] text-muted-foreground"
+                        title="Relevance relative to the best match"
+                      >
+                        {Math.round(r.score * 100)}%
+                      </span>
+                    </div>
+                    <ResultSummary
+                      key={`${submitted}|${model}`}
+                      projectId={projectId}
+                      result={r}
+                      query={submitted}
+                      model={model}
+                    />
+                    {r.snippet && !overlaps(r.summary, r.snippet) && (
+                      <blockquote className="border-l-2 pl-2 text-xs text-muted-foreground/80 italic">
+                        {r.snippet}
+                      </blockquote>
+                    )}
                     <button
                       type="button"
-                      className="text-left font-medium hover:underline"
                       onClick={() => onOpenResult(r)}
+                      className="flex w-fit items-center gap-1 font-mono text-xs text-primary/80 hover:text-primary hover:underline"
                     >
-                      {r.title}
+                      <FileTextIcon className="size-3.5" />
+                      {r.page != null ? `${r.path}, page ${r.page}` : r.path}
                     </button>
-                    <span
-                      className="ml-auto shrink-0 pt-0.5 font-mono text-[11px] text-muted-foreground"
-                      title="Relevance relative to the best match"
-                    >
-                      {Math.round(r.score * 100)}%
-                    </span>
                   </div>
-                  <ResultSummary
-                    key={`${submitted}|${model}`}
-                    projectId={projectId}
-                    result={r}
-                    query={submitted}
-                    model={model}
-                  />
-                  {r.snippet && !overlaps(r.summary, r.snippet) && (
-                    <blockquote className="border-l-2 pl-2 text-xs text-muted-foreground/80 italic">
-                      {r.snippet}
-                    </blockquote>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onOpenResult(r)}
-                    className="flex w-fit items-center gap-1 font-mono text-xs text-primary/80 hover:text-primary hover:underline"
-                  >
-                    <FileTextIcon className="size-3.5" />
-                    {r.page != null ? `${r.path}, page ${r.page}` : r.path}
-                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+          {loading && results === null && (
+            <div className="flex flex-col gap-3 p-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-4/5" />
                 </div>
-              </li>
-            ))}
-          </ol>
-        )}
-        {loading && results === null && (
-          <div className="flex flex-col gap-3 p-4">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-4/5" />
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
